@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>MQTT Web Client (HiveMQ Cloud)</title>
+
+  <!-- 1) Include Paho JavaScript (bạn đã tải về trước đó, đặt tên file là paho-mqtt.js) -->
+  <script src="paho-mqtt.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #status { margin-bottom: 10px; }
+    #log { border: 1px solid #ccc; padding: 10px; height: 200px; overflow-y: auto; }
+    #controls { margin-top: 10px; }
+    #controls input[type="text"] { width: 200px; }
+  </style>
+</head>
+<body>
+  <h2>MQTT Web Client (HiveMQ Cloud)</h2>
+  <div id="status">Trạng thái: <span id="connStatus">Chưa kết nối</span></div>
+
+  <div id="controls">
+    <input type="text" id="topicInput" placeholder="Topic (ví dụ: esp8266/dht11)" />
+    <button id="subscribeBtn">Subscribe</button>
+    <button id="unsubscribeBtn">Unsubscribe</button>
+    <br/><br/>
+    <input type="text" id="sendTopic" placeholder="Topic gửi (ví dụ: esp8266/dht11)" />
+    <input type="text" id="messageInput" placeholder="Nội dung tin nhắn" />
+    <button id="publishBtn">Publish</button>
+  </div>
+
+  <h3>Log (Nhật ký)</h3>
+  <div id="log"></div>
+
+  <script>
+    // ==== 1. CẤU HÌNH THÔNG TIN KẾT NỐI ====
+    const host = "7040d0dfee7643d5a8dd0f6924407428.s1.eu.hivemq.cloud";   // Ví dụ: abcdefg12345.s1.eu.hivemq.cloud
+    const port = 8884;                      // cổng wss:// (MQTT over TLS WebSocket)
+    const clientId = "webClient-" + Math.floor(Math.random() * 10000);
+    const username = "nguoidung1";             // Thay bằng user HiveMQ Cloud
+    const password = "12345678Tr";         // Thay bằng password tương ứng
+
+    let client = null;
+
+    // ==== 2. KHỞI TẠO ĐỐI TƯỢNG MQTT ====
+    function initMQTT() {
+      // DEBUG: kiểm tra xem Paho và Paho.Client đã tồn tại chưa
+      console.log("Paho:", Paho);
+      console.log("Paho.Client:", Paho && Paho.Client);
+
+      if (!Paho || typeof Paho.Client !== "function") {
+        console.error("Paho.Client chưa load được. Vui lòng kiểm tra lại <script> include.");
+        document.getElementById("connStatus").innerText = "Lỗi thư viện";
+        document.getElementById("connStatus").style.color = "red";
+        return;
+      }
+
+      // Path mặc định HiveMQ Cloud thường để "/mqtt"
+      const path = "/mqtt";
+      client = new Paho.Client(host, Number(port), path, clientId);
+
+      client.onConnectionLost = onConnectionLost;
+      client.onMessageArrived = onMessageArrived;
+
+      const options = {
+        useSSL: true,
+        userName: username,
+        password: password,
+        onSuccess: onConnect,
+        onFailure: onFailure
+      };
+
+      client.connect(options);
+      log("Đang kết nối tới " + host + ":" + port + path + " ...");
+    }
+
+    // ==== 3. CALLBACK KHI KẾT NỐI THÀNH CÔNG ====
+    function onConnect() {
+      log("=== Đã kết nối thành công đến HiveMQ Cloud ===");
+      document.getElementById("connStatus").innerText = "Đã kết nối";
+      document.getElementById("connStatus").style.color = "green";
+      // (Tùy chọn) Subscribe một topic mặc định
+      // client.subscribe("esp8266/dht11");
+    }
+
+    // ==== 4. CALLBACK KHI KẾT NỐI THẤT BẠI ====
+    function onFailure(response) {
+      log("### Kết nối thất bại: " + response.errorMessage);
+      document.getElementById("connStatus").innerText = "Thất bại";
+      document.getElementById("connStatus").style.color = "red";
+    }
+
+    // ==== 5. CALLBACK KHI MẤT KẾT NỐI ====
+    function onConnectionLost(responseObject) {
+      if (responseObject.errorCode !== 0) {
+        log("### Đã mất kết nối: " + responseObject.errorMessage);
+        document.getElementById("connStatus").innerText = "Ngắt kết nối";
+        document.getElementById("connStatus").style.color = "orange";
+        // Tự động cố gắng reconnect sau 3 giây
+        setTimeout(initMQTT, 3000);
+      }
+    }
+
+    // ==== 6. CALLBACK KHI CÓ TIN NHẮN ĐẾN ====
+    function onMessageArrived(message) {
+      const topic = message.destinationName;
+      const payload = message.payloadString;
+      log(`[Tin đến] Topic="${topic}", Nội dung="${payload}"`);
+    }
+
+    // ==== 7. HÀM GHI LOG RA KHUNG HTML ====
+    function log(txt) {
+      const logDiv = document.getElementById("log");
+      const now = new Date().toLocaleTimeString();
+      logDiv.innerHTML += `[${now}] ${txt}<br/>`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    // ==== 8. SUBSCRIBE TOPIC ====
+    function subscribeTopic() {
+      const topic = document.getElementById("topicInput").value.trim();
+      if (!topic) {
+        alert("Vui lòng nhập topic để subscribe!");
+        return;
+      }
+      client.subscribe(topic);
+      log(`Đã gửi lệnh SUBSCRIBE tới "${topic}"`);
+    }
+
+    // ==== 9. UNSUBSCRIBE TOPIC ====
+    function unsubscribeTopic() {
+      const topic = document.getElementById("topicInput").value.trim();
+      if (!topic) {
+        alert("Vui lòng nhập topic để unsubscribe!");
+        return;
+      }
+      client.unsubscribe(topic);
+      log(`Đã gửi lệnh UNSUBSCRIBE tới "${topic}"`);
+    }
+
+    // ==== 10. PUBLISH TIN NHẮN ====
+    function publishTopic() {
+      const topic = document.getElementById("sendTopic").value.trim();
+      const msg = document.getElementById("messageInput").value.trim();
+      if (!topic || !msg) {
+        alert("Vui lòng nhập đầy đủ topic và nội dung tin nhắn!");
+        return;
+      }
+      // Chú ý: giờ dùng Paho.Message, không phải Paho.MQTT.Message
+      const message = new Paho.Message(msg);
+      message.destinationName = topic;
+      message.qos = 0;
+      message.retained = false;
+      client.send(message);
+      log(`Đã gửi PUBLISH tới "${topic}": ${msg}`);
+      document.getElementById("messageInput").value = "";
+    }
+
+    // ==== 11. GÁN SỰ KIỆN CHO CÁC NÚT ====
+    window.addEventListener("load", () => {
+      document.getElementById("subscribeBtn").addEventListener("click", subscribeTopic);
+      document.getElementById("unsubscribeBtn").addEventListener("click", unsubscribeTopic);
+      document.getElementById("publishBtn").addEventListener("click", publishTopic);
+      initMQTT();
+    });
+  </script>
+</body>
+</html>
