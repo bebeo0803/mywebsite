@@ -1,48 +1,148 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <title>MQTT Web Client (HiveMQ Cloud)</title>
-
-  <!-- 1) Include Paho JavaScript (bạn đã tải về trước đó, đặt tên file là paho-mqtt.js) -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bảng Điều Khiển</title>
+    <!-- 1) Include Paho JavaScript (bạn đã tải về trước đó, đặt tên file là paho-mqtt.js) -->
   <script src="paho-mqtt.js"></script>
-
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    #status { margin-bottom: 10px; }
-    #log { border: 1px solid #ccc; padding: 10px; height: 200px; overflow-y: auto; }
-    #controls { margin-top: 10px; }
-    #controls input[type="text"] { width: 200px; }
+    body {
+      font-family: sans-serif;
+      background: #2c2c2c;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 0;
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 160px);
+      gap: 16px;
+    }
+
+    .widget {
+      background: #444;
+      border-radius: 16px;
+      padding: 14px;
+      text-align: center;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .widget .icon {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    .light {
+      cursor: pointer;
+    }
+
+    .light.on {
+      background: #f5e342;
+      color: #000;
+    }
+
+    svg {
+      transform: rotate(-90deg);
+    }
+
+    .needle {
+      stroke: #ff4757;
+      stroke-width: 3;
+      transform-origin: center;
+      transition: transform 0.4s ease-out;
+    }
+
+    .label {
+      margin-top: 8px;
+      font-weight: bold;
+    }
+
+    .value {
+      font-size: 18px;
+    }
   </style>
 </head>
 <body>
-  <h2>MQTT Web Client (HiveMQ Cloud)</h2>
-  <div id="status">Trạng thái: <span id="connStatus">Chưa kết nối</span></div>
+  <div class="grid">
 
-  <div id="controls">
-    <input type="text" id="topicInput" placeholder="Topic (ví dụ: esp8266/dht11)" />
-    <button id="subscribeBtn">Subscribe</button>
-    <button id="unsubscribeBtn">Unsubscribe</button>
-    <br/><br/>
-    <input type="text" id="sendTopic" placeholder="Topic gửi (ví dụ: esp8266/dht11)" />
-    <input type="text" id="messageInput" placeholder="Nội dung tin nhắn" />
-    <button id="publishBtn">Publish</button>
+    <!-- Đèn -->
+    <div class="widget light" onclick="toggleLight(this)">
+      <div class="icon">💡</div>
+      <div>Đèn 1</div>
+      <div> </div>
+    </div>
+    <div class="widget light" onclick="toggleLight(this)">
+      <div class="icon">💡</div>
+      <div>Đèn 2</div>
+      <div> </div>
+    </div>
+    <div class="widget light" onclick="toggleLight(this)">
+      <div class="icon">💡</div>
+      <div>Đèn 3</div>
+      <div> </div>
+    </div>
+    <div class="widget light" onclick="toggleLight(this)">
+      <div class="icon">💡</div>
+      <div>Đèn 4</div>
+      <div> </div>
+    </div>
+
+    <!-- Nhiệt độ (gauge) -->
+    <div class="widget">
+      <svg width="120" height="120">
+        <circle cx="60" cy="60" r="50" stroke="#888" stroke-width="10" fill="none"/>
+        <line x1="60" y1="60" x2="60" y2="20" class="needle" id="tempNeedle"/>
+      </svg>
+      <div class="label">Nhiệt độ</div>
+      <div class="value" id="tempValue">-- °C</div>
+    </div>
+
+    <!-- Độ ẩm (gauge) -->
+    <div class="widget">
+      <svg width="120" height="120">
+        <circle cx="60" cy="60" r="50" stroke="#888" stroke-width="10" fill="none"/>
+        <line x1="60" y1="60" x2="60" y2="20" class="needle" id="humidNeedle"/>
+      </svg>
+      <div class="label">Độ ẩm</div>
+      <div class="value" id="humidValue">-- %</div>
+    </div>
+
+    <!-- Điện áp -->
+    <div class="widget">
+      <div class="icon">🔋</div>
+      <div>Điện áp: <span id="voltValue">220</span> V</div>
+      <div>3 giờ trước</div>
+    </div>
+
+    <!-- Dòng điện -->
+    <div class="widget">
+      <div class="icon">⚡</div>
+      <div>Dòng điện: <span id="currValue">1.5</span> A</div>
+      <div>3 giờ trước</div>
+    </div>
   </div>
+    <!-- <div id="status">Trạng thái: <span id="connStatus">Chưa kết nối</span></div>
 
-  <h3>Log (Nhật ký)</h3>
-  <div id="log"></div>
-
+    <h3>Log (Nhật ký)</h3>
+    <div id="log" style="color: white; background: black; overflow-y: auto; height: 200px;"></div> -->
   <script>
+
     // ==== 1. CẤU HÌNH THÔNG TIN KẾT NỐI ====
     const host = "7040d0dfee7643d5a8dd0f6924407428.s1.eu.hivemq.cloud";   // Ví dụ: abcdefg12345.s1.eu.hivemq.cloud
     const port = 8884;                      // cổng wss:// (MQTT over TLS WebSocket)
     const clientId = "webClient-" + Math.floor(Math.random() * 10000);
-    const username = "nguoidung1";             // Thay bằng user HiveMQ Cloud
+    const username = "hienthiden";             // Thay bằng user HiveMQ Cloud
     const password = "12345678Tr";         // Thay bằng password tương ứng
 
     let client = null;
 
-    // ==== 2. KHỞI TẠO ĐỐI TƯỢNG MQTT ====
+    // ==== 2. KHỞI TẠO ĐỐI TƯỢNG MQTT ==== 
     function initMQTT() {
       // DEBUG: kiểm tra xem Paho và Paho.Client đã tồn tại chưa
       console.log("Paho:", Paho);
@@ -50,8 +150,8 @@
 
       if (!Paho || typeof Paho.Client !== "function") {
         console.error("Paho.Client chưa load được. Vui lòng kiểm tra lại <script> include.");
-        document.getElementById("connStatus").innerText = "Lỗi thư viện";
-        document.getElementById("connStatus").style.color = "red";
+        // document.getElementById("connStatus").innerText = "Lỗi thư viện";
+        // document.getElementById("connStatus").style.color = "red";
         return;
       }
 
@@ -71,29 +171,30 @@
       };
 
       client.connect(options);
-      log("Đang kết nối tới " + host + ":" + port + path + " ...");
+      console.log("Đang kết nối tới " + host + ":" + port + path + " ...");
     }
 
     // ==== 3. CALLBACK KHI KẾT NỐI THÀNH CÔNG ====
     function onConnect() {
-      log("=== Đã kết nối thành công đến HiveMQ Cloud ===");
-      document.getElementById("connStatus").innerText = "Đã kết nối";
-      document.getElementById("connStatus").style.color = "green";
+      console.log("=== Đã kết nối thành công đến HiveMQ Cloud ===");
+      // document.getElementById("connStatus").innerText = "Đã kết nối";
+      // document.getElementById("connStatus").style.color = "green";
       // (Tùy chọn) Subscribe một topic mặc định
-      // client.subscribe("esp8266/dht11");
+      client.subscribe("home/data");
+      // log("Đã gửi lệnh SUBSCRIBE tới 'home/data'");
     }
 
     // ==== 4. CALLBACK KHI KẾT NỐI THẤT BẠI ====
     function onFailure(response) {
-      log("### Kết nối thất bại: " + response.errorMessage);
-      document.getElementById("connStatus").innerText = "Thất bại";
-      document.getElementById("connStatus").style.color = "red";
+      console.log("### Kết nối thất bại: " + response.errorMessage);
+      // document.getElementById("connStatus").innerText = "Thất bại";
+      // document.getElementById("connStatus").style.color = "red";
     }
 
     // ==== 5. CALLBACK KHI MẤT KẾT NỐI ====
     function onConnectionLost(responseObject) {
       if (responseObject.errorCode !== 0) {
-        log("### Đã mất kết nối: " + responseObject.errorMessage);
+        // log("### Đã mất kết nối: " + responseObject.errorMessage);
         document.getElementById("connStatus").innerText = "Ngắt kết nối";
         document.getElementById("connStatus").style.color = "orange";
         // Tự động cố gắng reconnect sau 3 giây
@@ -101,12 +202,49 @@
       }
     }
 
+  isFistConnect = true; // Biến để kiểm tra lần kết nối đầu tiên
     // ==== 6. CALLBACK KHI CÓ TIN NHẮN ĐẾN ====
-    function onMessageArrived(message) {
-      const topic = message.destinationName;
-      const payload = message.payloadString;
-      log(`[Tin đến] Topic="${topic}", Nội dung="${payload}"`);
+  function onMessageArrived(message) {
+    const topic = message.destinationName;
+    const payload = message.payloadString;
+    // log(`[Tin đến] Topic="${topic}", Nội dung="${payload}"`);
+
+    let data;
+    try {
+      data = JSON.parse(payload);
+    } catch (err) {
+      console.error("Không parse được JSON:", err);
+      return;
     }
+
+    // 1) Cập nhật gauge Nhiệt độ (max 50°C)
+    setGauge("tempNeedle", data.temperature, 50, "tempValue", "°C");
+
+    // 2) Cập nhật gauge Độ ẩm (max 100%)
+    setGauge("humidNeedle", data.humidity, 100, "humidValue", "%");
+
+    // 3) Cập nhật Điện áp và Dòng điện
+    document.getElementById("voltValue").textContent = data.volt;
+    document.getElementById("currValue").textContent = data.current;
+
+    // 4) Cập nhật trạng thái các Đèn
+    // Giả sử bạn có đúng 4 phần tử .widget.light theo thứ tự Đèn 1→4
+    if (isFistConnect) {
+      const lights = document.querySelectorAll('.widget.light');
+      lights.forEach((el, idx) => {
+        // Lấy key tương ứng trong JSON: light_1_state, light_2_state, …
+        const key = `light_${idx + 1}_state`;
+        const state = data[key];
+        if (state === 1) {
+          el.classList.add('on');
+        } else {
+          el.classList.remove('on');
+        }
+      });
+   
+      isFistConnect = false; // Chỉ subscribe một lần
+    }
+  }
 
     // ==== 7. HÀM GHI LOG RA KHUNG HTML ====
     function log(txt) {
@@ -117,15 +255,18 @@
     }
 
     // ==== 8. SUBSCRIBE TOPIC ====
-    function subscribeTopic() {
-      const topic = document.getElementById("topicInput").value.trim();
-      if (!topic) {
-        alert("Vui lòng nhập topic để subscribe!");
-        return;
-      }
-      client.subscribe(topic);
-      log(`Đã gửi lệnh SUBSCRIBE tới "${topic}"`);
+    function subscribeTopic(topic) {
+    if (!client) {
+      alert("Client chưa được khởi tạo!");
+      return;
     }
+    if (client.connected === false) {
+      alert("Client chưa kết nối thành công!");
+      return;
+    }
+    client.subscribe(topic);
+    // log(`Đã gửi lệnh SUBSCRIBE tới "${topic}"`);
+  }
 
     // ==== 9. UNSUBSCRIBE TOPIC ====
     function unsubscribeTopic() {
@@ -135,13 +276,16 @@
         return;
       }
       client.unsubscribe(topic);
-      log(`Đã gửi lệnh UNSUBSCRIBE tới "${topic}"`);
+      // log(`Đã gửi lệnh UNSUBSCRIBE tới "${topic}"`);
     }
 
     // ==== 10. PUBLISH TIN NHẮN ====
-    function publishTopic() {
-      const topic = document.getElementById("sendTopic").value.trim();
-      const msg = document.getElementById("messageInput").value.trim();
+    function publishTopic(topic, msg) {
+      if (!client) {
+        alert("Client chưa được khởi tạo!");
+        return;
+      }
+ 
       if (!topic || !msg) {
         alert("Vui lòng nhập đầy đủ topic và nội dung tin nhắn!");
         return;
@@ -152,17 +296,48 @@
       message.qos = 0;
       message.retained = false;
       client.send(message);
-      log(`Đã gửi PUBLISH tới "${topic}": ${msg}`);
+      // log(`Đã gửi PUBLISH tới "${topic}": ${msg}`);
       document.getElementById("messageInput").value = "";
     }
-
+ 
     // ==== 11. GÁN SỰ KIỆN CHO CÁC NÚT ====
-    window.addEventListener("load", () => {
-      document.getElementById("subscribeBtn").addEventListener("click", subscribeTopic);
-      document.getElementById("unsubscribeBtn").addEventListener("click", unsubscribeTopic);
-      document.getElementById("publishBtn").addEventListener("click", publishTopic);
+      window.addEventListener("load", () => {
+      // document.getElementById("subscribeBtn").addEventListener("click", subscribeTopic);
+      // document.getElementById("unsubscribeBtn").addEventListener("click", unsubscribeTopic);
+      // document.getElementById("publishBtn").addEventListener("click", publishTopic);
       initMQTT();
     });
+ 
+    function toggleLight(el) {
+      el.classList.toggle('on');
+      const nameDiv = el.children[1];      
+      const lightName = nameDiv.textContent.trim(); 
+      if (isLightOn(el)) {
+        publishTopic("home/lights", lightName + " ON");
+        // log(`Đèn "${el.textContent.trim()}" đã bật`);
+      } else {
+        publishTopic("home/lights", lightName + " OFF");
+        // log(`Đèn "${el.textContent.trim()}" đã tắt`);
+      }
+    }
+    function isLightOn(el) {
+      return el.classList.contains('on');
+    }
+    function setGauge(needleId, value, maxValue, valueDisplayId, unit) {
+      const angle = (value / maxValue) * 180;
+      const needle = document.getElementById(needleId);
+      needle.style.transform = `rotate(${angle}deg)`;
+
+      const display = document.getElementById(valueDisplayId);
+      display.textContent = `${value} ${unit}`;
+    }
+
+    // Giá trị mẫu
+    const temp = 100;   // °C
+    const humid = 65;  // %
+
+    setGauge("tempNeedle", temp, 50, "tempValue", "°C");
+    setGauge("humidNeedle", humid, 100, "humidValue", "%");
   </script>
 </body>
 </html>
